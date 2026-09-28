@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Shopee Product Hunter — Lisensi Chrome Extension</title>
+<meta name="description" content="Riset produk Shopee lebih cepat: analisa pencarian, variasi terlaris, umur produk, dan komisi affiliate. Beli lisensi via Lynk.id, kode dikirim otomatis.">
+<meta name="theme-color" content="#030712">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%AF%3C/text%3E%3C/svg%3E">
+
+<!-- Tailwind (Play CDN) — jalan langsung di Cloudflare Pages tanpa build step -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+*{
+    font-family:'Space Grotesk',sans-serif;
+}
+[hidden]{display:none!important}
+
+html{scroll-padding-top:1rem}
+@media (prefers-reduced-motion:no-preference){
+    html{scroll-behavior:smooth}
+}
+
+body{
+    background:
+    radial-gradient(circle at top left,#312e81 0%,transparent 25%),
+    radial-gradient(circle at bottom right,#06b6d4 0%,transparent 25%),
+    #030712;
+    overflow-x:hidden;
+    color:white;
+}
+
+.bg-grid-pattern{
+    background-image:
+    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.03) 1px, transparent 1px);
+    background-size:35px 35px;
+}
+
+.glass{
+    background:rgba(10,15,30,.72);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    border:1px solid rgba(255,255,255,.08);
+}
+
+.glow{
+    position:absolute;
+    width:300px;
+    height:300px;
+    border-radius:999px;
+    filter:blur(100px);
+    opacity:.22;
+    pointer-events:none;
+}
+
+.neon-text{
+    background:linear-gradient(90deg,#22d3ee,#8b5cf6);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+}
+
+.link-card{
+    transition:.35s ease;
+}
+.link-card:hover{
+    transform:translateY(-5px);
+    border-color:#22d3ee;
+    box-shadow:0 15px 35px rgba(34,211,238,.18);
+}
+
+.profile-glow{
+    position:absolute;
+    inset:-8px;
+    background:linear-gradient(90deg,#22d3ee,#8b5cf6);
+    border-radius:999px;
+    filter:blur(20px);
+    opacity:.5;
+}
+
+/* Gradasi sedikit digelapkan dari template supaya teks putih tetap terbaca (kontras) */
+.hero-btn{
+    background:linear-gradient(90deg,#7c3aed,#0891b2);
+    box-shadow:0 0 25px rgba(34,211,238,.3);
+    transition:transform .2s ease, opacity .2s ease;
+}
+.hero-btn:hover{transform:scale(1.02)}
+.hero-btn:disabled{opacity:.6;cursor:wait;transform:none}
+
+.float{
+    animation:float 5s ease-in-out infinite;
+}
+@keyframes float{
+    0%,100%{transform:translateY(0px);}
+    50%{transform:translateY(-10px);}
+}
+@media (prefers-reduced-motion:reduce){
+    .float{animation:none}
+    .link-card,.hero-btn{transition:none}
+    .link-card:hover{transform:none}
+    .spin{animation:none!important}
+}
+
+:focus-visible{
+    outline:2px solid #22d3ee;
+    outline-offset:3px;
+    border-radius:12px;
+}
+
+/* ---------- Checkout dialog ---------- */
+dialog#checkout{
+    background:#0a0f1e;
+    color:#fff;
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:28px;
+    width:calc(100% - 2rem);
+    max-width:28rem;
+    padding:0;
+    margin:auto;
+    max-height:calc(100dvh - 2rem);
+    overflow:auto;
+    box-shadow:0 25px 80px rgba(0,0,0,.6), 0 0 60px rgba(34,211,238,.08);
+}
+dialog#checkout::backdrop{
+    background:rgba(3,7,18,.78);
+    backdrop-filter:blur(6px);
+}
+.field{
+    width:100%;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:16px;
+    padding:.85rem 1rem;
+    font-size:16px; /* cegah zoom otomatis di iOS */
+    color:#fff;
+}
+.field::placeholder{color:#64748b}
+.field:focus{outline:2px solid #22d3ee;outline-offset:1px;border-color:transparent}
+.spin{
+    width:16px;height:16px;border-radius:999px;
+    border:2px solid rgba(34,211,238,.25);
+    border-top-color:#22d3ee;
+    animation:spin .8s linear infinite;
+    flex:none;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+</style>
+</head>
+
+<body>
+
+<div id="builder-content" class="relative min-h-screen overflow-hidden">
+
+<!-- BG GLOW -->
+<div class="glow bg-cyan-500 top-0 left-0"></div>
+<div class="glow bg-purple-500 bottom-0 right-0"></div>
+
+<div class="absolute inset-0 z-0 pointer-events-none opacity-40 bg-grid-pattern"></div>
+
+<main class="max-w-xl mx-auto px-6 py-12 relative z-10 flex flex-col">
+
+    <!-- PROFILE -->
+    <header class="text-center mb-6">
+
+        <div class="relative w-32 h-32 mx-auto mb-5 float">
+
+            <div class="profile-glow"></div>
+
+            <div class="relative w-full h-full rounded-full bg-[#0f172a] p-1">
+                <img
+                src="https://i.ibb.co.com/vx0gbSwC/ai-generated-image-4.webp"
+                alt="Foto profil Digital Creator ID"
+                width="128" height="128"
+                class="w-full h-full rounded-full object-cover border-4 border-[#0f172a]"
+                >
+            </div>
+
+            <div class="absolute bottom-1 right-1 w-8 h-8 rounded-full bg-green-500 border-4 border-[#030712]"></div>
+
+        </div>
+
+        <h1 class="text-4xl font-black">
+            Digital Creator
+            <span class="neon-text">ID</span>
+        </h1>
+
+        <p class="text-slate-400 text-sm mt-3 leading-relaxed max-w-xs mx-auto">
+            Tutorial AI, Automation, Digital Product,
+            Coding, dan Creator Tools modern.
+        </p>
+
+        <!-- SOCIAL (ganti href sesuai akun kamu) -->
+        <div class="flex justify-center gap-3 mt-6">
+            <a href="#" aria-label="YouTube"
+            class="w-11 h-11 rounded-2xl glass flex items-center justify-center text-red-500 hover:scale-110 transition">
+                <i class="fab fa-youtube"></i>
+            </a>
+            <a href="#" aria-label="Instagram"
+            class="w-11 h-11 rounded-2xl glass flex items-center justify-center text-pink-500 hover:scale-110 transition">
+                <i class="fab fa-instagram"></i>
+            </a>
+            <a href="#" aria-label="TikTok"
+            class="w-11 h-11 rounded-2xl glass flex items-center justify-center text-white hover:scale-110 transition">
+                <i class="fab fa-tiktok"></i>
+            </a>
+        </div>
+
+    </header>
+
+    <!-- PESANAN TERTUNDA (muncul otomatis kalau ada order belum selesai di browser ini) -->
+    <div id="resume" class="glass rounded-[28px] p-5 mb-6 border border-cyan-500/30" hidden>
+        <p class="font-bold text-white">Ada pesanan yang belum selesai</p>
+        <p id="resumeInfo" class="text-sm text-slate-400 mt-1"></p>
+        <div class="flex gap-3 mt-4">
+            <button id="resumeGo" type="button" class="hero-btn flex-1 min-h-[44px] rounded-2xl font-bold text-white">Cek pembayaran</button>
+            <button id="resumeDrop" type="button" class="min-h-[44px] px-4 rounded-2xl glass text-slate-300 font-semibold">Hapus</button>
+        </div>
+    </div>
+
+    <!-- HERO -->
+    <section class="glass rounded-[32px] p-6 mb-6 relative overflow-hidden shadow-2xl">
+
+        <div class="absolute top-0 right-0 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <span class="text-xs uppercase tracking-[3px] font-bold text-cyan-400">
+            CHROME EXTENSION
+        </span>
+
+        <h2 class="text-4xl font-black leading-tight mt-3">
+            Riset Produk Shopee
+            Lebih Cepat dengan
+            <span class="neon-text">Product Hunter</span>
+        </h2>
+
+        <p class="text-slate-400 text-sm mt-4 leading-relaxed">
+            Lihat potensi kata kunci, variasi terlaris, umur produk, dan komisi
+            affiliate langsung di halaman Shopee. Bayar lewat Lynk.id, kode lisensi
+            muncul otomatis di halaman ini dan dikirim ke emailmu.
+        </p>
+
+        <a href="#paket" class="hero-btn mt-6 w-full min-h-[52px] py-4 rounded-2xl text-white font-bold flex items-center justify-center">
+            Lihat Paket
+        </a>
+
+    </section>
+
+    <!-- VIDEO (tampil kalau CONFIG.youtubeId diisi) -->
+    <section id="videoWrap" class="glass rounded-[30px] overflow-hidden mb-6 border border-cyan-500/10" hidden>
+        <div class="aspect-video bg-black relative">
+            <button id="videoBtn" type="button" class="absolute inset-0 w-full h-full" aria-label="Putar video">
+                <img id="videoThumb" src="" alt="" class="w-full h-full object-cover opacity-60">
+                <span class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span class="w-16 h-16 rounded-full bg-gradient-to-r from-cyan-500 to-purple-500 flex items-center justify-center shadow-2xl">
+                        <i class="fab fa-youtube text-white text-3xl"></i>
+                    </span>
+                    <span class="mt-3 text-white text-sm font-bold">Klik untuk Putar Video</span>
+                </span>
+            </button>
+        </div>
+    </section>
+
+    <!-- FITUR -->
+    <section class="mb-8" aria-labelledby="h-fitur">
+        <h2 id="h-fitur" class="text-2xl font-black mb-4">Yang kamu dapat</h2>
+        <ul class="grid grid-cols-2 gap-3">
+            <li class="glass rounded-[24px] p-4">
+                <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-3"><i class="fas fa-search"></i></div>
+                <h3 class="font-bold text-sm">Analisa Pencarian</h3>
+                <p class="text-xs text-slate-400 mt-1 leading-relaxed">Jumlah produk, harga rata-rata, dan potensi market per kata kunci.</p>
+            </li>
+            <li class="glass rounded-[24px] p-4">
+                <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center mb-3"><i class="fas fa-layer-group"></i></div>
+                <h3 class="font-bold text-sm">Variasi Terlaris</h3>
+                <p class="text-xs text-slate-400 mt-1 leading-relaxed">Tahu variasi produk mana yang paling laku.</p>
+            </li>
+            <li class="glass rounded-[24px] p-4">
+                <div class="w-10 h-10 rounded-xl bg-green-500/10 text-green-400 flex items-center justify-center mb-3"><i class="fas fa-clock"></i></div>
+                <h3 class="font-bold text-sm">CTime Box</h3>
+                <p class="text-xs text-slate-400 mt-1 leading-relaxed">Tanggal upload dan umur produk yang akurat.</p>
+            </li>
+            <li class="glass rounded-[24px] p-4">
+                <div class="w-10 h-10 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center mb-3"><i class="fas fa-clone"></i></div>
+                <h3 class="font-bold text-sm">Produk Serupa</h3>
+                <p class="text-xs text-slate-400 mt-1 leading-relaxed">Bandingkan harga dan jumlah terjual produk sejenis.</p>
+            </li>
+            <li class="glass rounded-[24px] p-4">
+                <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-3"><i class="fas fa-filter"></i></div>
+                <h3 class="font-bold text-sm">Filter Lanjutan</h3>
+                <p class="text-xs text-slate-400 mt-1 leading-relaxed">Saring produk berdasarkan harga, rating, dan penjualan.</p>
+            </li>
+            <li class="glass rounded-[24px] p-4">
+                <div class="w-10 h-10 rounded-xl bg-yellow-500/10 text-yellow-400 flex items-center justify-center mb-3"><i class="fas fa-coins"></i></div>
+                <h3 class="font-bold text-sm">Affiliate Intelligence</h3>
+                <p class="text-xs text-slate-400 mt-1 leading-relaxed">Cek komisi, buat link affiliate, perkirakan potensi earning.</p>
+            </li>
+            <li class="glass rounded-[24px] p-4">
+                <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center mb-3"><i class="fas fa-tags"></i></div>
+                <h3 class="font-bold text-sm">Badge Kartu Produk</h3>
+                <p class="text-xs text-slate-400 mt-1 leading-relaxed">Tanggal upload dan umur produk tampil warna-warni di kartu.</p>
+            </li>
+            <li class="glass rounded-[24px] p-4">
+                <div class="w-10 h-10 rounded-xl bg-green-500/10 text-green-400 flex items-center justify-center mb-3"><i class="fas fa-users"></i></div>
+                <h3 class="font-bold text-sm">Invite Team</h3>
+                <p class="text-xs text-slate-400 mt-1 leading-relaxed">Undang beberapa email ke satu lisensi (syarat dan ketentuan berlaku).</p>
+            </li>
+        </ul>
+    </section>
+
+    <!-- PAKET -->
+    <section id="paket" class="mb-8" aria-labelledby="h-paket">
+        <h2 id="h-paket" class="text-2xl font-black mb-1">Pilih paket</h2>
+        <p class="text-sm text-slate-400 mb-4">Semua paket punya fitur yang sama. Bedanya hanya lama masa aktif.</p>
+        <div id="plans" class="space-y-4" aria-live="polite"></div>
+    </section>
+
+    <!-- CARA KERJA -->
+    <section class="mb-8" aria-labelledby="h-cara">
+        <h2 id="h-cara" class="text-2xl font-black mb-4">Dari bayar sampai aktif</h2>
+        <ol class="glass rounded-[28px] p-5 space-y-5">
+            <li class="flex gap-4">
+                <span class="w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-cyan-600 flex items-center justify-center text-sm font-bold flex-none">1</span>
+                <div>
+                    <h3 class="font-bold">Pilih paket dan isi email</h3>
+                    <p class="text-sm text-slate-400">Email dipakai untuk mencocokkan pembayaranmu.</p>
+                </div>
+            </li>
+            <li class="flex gap-4">
+                <span class="w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-cyan-600 flex items-center justify-center text-sm font-bold flex-none">2</span>
+                <div>
+                    <h3 class="font-bold">Bayar di Lynk.id</h3>
+                    <p class="text-sm text-slate-400">Isi email yang sama di halaman checkout Lynk.id.</p>
+                </div>
+            </li>
+            <li class="flex gap-4">
+                <span class="w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-cyan-600 flex items-center justify-center text-sm font-bold flex-none">3</span>
+                <div>
+                    <h3 class="font-bold">Terima kode lisensi</h3>
+                    <p class="text-sm text-slate-400">Kode muncul di halaman ini dan dikirim ke emailmu.</p>
+                </div>
+            </li>
+            <li class="flex gap-4">
+                <span class="w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-cyan-600 flex items-center justify-center text-sm font-bold flex-none">4</span>
+                <div>
+                    <h3 class="font-bold">Aktifkan di extension</h3>
+                    <p class="text-sm text-slate-400">Buka Shopee Product Hunter, login, pilih Aktifkan License, lalu masukkan kodenya.</p>
+                </div>
+            </li>
+        </ol>
+    </section>
+
+    <!-- MENU (dari template link bio) -->
+    <nav class="space-y-4" aria-label="Tautan lainnya">
+
+        <a href="#" data-link="support"
+        class="link-card glass rounded-[28px] p-5 flex items-center gap-4 border border-white/5">
+            <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-2xl">
+                <i class="fab fa-telegram"></i>
+            </div>
+            <div class="flex-1">
+                <h3 class="font-bold text-white">Grup Support</h3>
+                <p class="text-sm text-slate-400">Tanya admin dan dapat update terbaru</p>
+            </div>
+            <i class="fas fa-chevron-right text-cyan-400" aria-hidden="true"></i>
+        </a>
+
+        <!-- Ganti href="#" pada tiga kartu di bawah dengan link asli -->
+        <a href="#"
+        class="link-card glass rounded-[28px] p-5 flex items-center gap-4 border border-white/5">
+            <div class="w-14 h-14 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-2xl">
+                <i class="fab fa-youtube"></i>
+            </div>
+            <div class="flex-1">
+                <h3 class="font-bold text-white">Channel YouTube</h3>
+                <p class="text-sm text-slate-400">Tutorial AI &amp; Digital Product</p>
+            </div>
+            <i class="fas fa-chevron-right text-cyan-400" aria-hidden="true"></i>
+        </a>
+
+        <a href="#"
+        class="link-card glass rounded-[28px] p-5 flex items-center gap-4 border border-white/5">
+            <div class="w-14 h-14 rounded-2xl bg-green-500/10 text-green-400 flex items-center justify-center text-2xl">
+                <i class="fab fa-whatsapp"></i>
+            </div>
+            <div class="flex-1">
+                <h3 class="font-bold text-white">Grup WhatsApp</h3>
+                <p class="text-sm text-slate-400">Komunitas &amp; Networking</p>
+            </div>
+            <i class="fas fa-chevron-right text-cyan-400" aria-hidden="true"></i>
+        </a>
+
+        <a href="#"
+        class="link-card glass rounded-[28px] p-5 flex items-center gap-4 border border-white/5">
+            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-2xl">
+                <i class="fas fa-code"></i>
+            </div>
+            <div class="flex-1">
+                <h3 class="font-bold text-white">Vibe Coding</h3>
+                <p class="text-sm text-slate-400">Belajar coding modern</p>
+            </div>
+            <i class="fas fa-chevron-right text-cyan-400" aria-hidden="true"></i>
+        </a>
+
+    </nav>
+
+    <!-- FOOTER -->
+    <footer class="mt-10 text-center">
+        <p class="text-xs text-slate-400 tracking-widest uppercase">
+            © 2026 Digital Creator ID
+        </p>
+        <p class="text-xs text-slate-400 mt-2">
+            Pembayaran diproses oleh Lynk.id.
+            <a id="tgFallback" href="#" class="underline decoration-cyan-400/60 underline-offset-2 hover:text-white" hidden>Beli lewat Telegram</a>
+        </p>
+    </footer>
+
+</main>
+</div>
+
+<!-- ============ CHECKOUT DIALOG ============ -->
+<dialog id="checkout" aria-labelledby="ck-title">
+    <div class="p-6">
+
+        <div class="flex items-start justify-between gap-4 mb-5">
+            <h2 id="ck-title" class="text-xl font-black">Beli paket</h2>
+            <button id="ckClose" type="button" aria-label="Tutup"
+            class="w-10 h-10 -mt-1 -mr-2 rounded-xl flex items-center justify-center text-slate-400 hover:text-white flex-none">
+                <i class="fas fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Langkah 1: email -->
+        <form id="ckForm" data-step="form" novalidate>
+            <div class="glass rounded-2xl p-4 mb-5 flex items-center justify-between gap-4">
+                <div>
+                    <p id="ckPlanName" class="font-bold"></p>
+                    <p id="ckPlanDays" class="text-sm text-slate-400"></p>
+                </div>
+                <p id="ckPlanPrice" class="text-xl font-extrabold"></p>
+            </div>
+
+            <label for="ckEmail" class="block text-sm font-semibold mb-2">Email</label>
+            <input id="ckEmail" name="email" type="email" inputmode="email" autocomplete="email"
+                   placeholder="nama@email.com" class="field" required>
+            <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+                Pakai email yang <b class="text-white">sama persis</b> saat checkout di Lynk.id.
+                Email ini dipakai untuk mencocokkan pembayaran dan mengirim kode lisensi.
+            </p>
+
+            <div class="hp" aria-hidden="true">
+                <label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+            </div>
+
+            <p id="ckError" role="alert" class="text-sm text-red-400 mt-3" hidden></p>
+
+            <button id="ckSubmit" type="submit" class="hero-btn mt-5 w-full min-h-[52px] rounded-2xl text-white font-bold">
+                Lanjut ke pembayaran
+            </button>
+        </form>
+
+        <!-- Langkah 2: bayar + tunggu -->
+        <div data-step="pay" hidden>
+            <div class="glass rounded-2xl p-4 mb-5 text-sm space-y-1">
+                <div class="flex justify-between gap-4"><span class="text-slate-400">Paket</span><b id="payPlan"></b></div>
+                <div class="flex justify-between gap-4"><span class="text-slate-400">Total</span><b id="payAmount"></b></div>
+                <div class="flex justify-between gap-4"><span class="text-slate-400">Email</span><b id="payEmail" class="break-all text-right"></b></div>
+                <div class="flex justify-between gap-4"><span class="text-slate-400">Order ID</span><b id="payOrder" class="font-mono text-xs"></b></div>
+            </div>
+
+            <a id="payLink" href="#" target="_blank" rel="noopener noreferrer"
+               class="hero-btn w-full min-h-[52px] rounded-2xl text-white font-bold flex items-center justify-center gap-2">
+                <i class="fas fa-lock text-sm" aria-hidden="true"></i> Bayar di Lynk.id
+            </a>
+            <p class="text-xs text-slate-400 mt-3 leading-relaxed">
+                Di halaman Lynk.id, isi email <b id="payEmail2" class="text-white break-all"></b>.
+                Halaman ini terbuka di tab baru, jadi kamu bisa kembali ke sini setelah membayar.
+            </p>
+
+            <div class="glass rounded-2xl p-4 mt-5">
+                <div class="flex items-center gap-3">
+                    <span id="paySpin" class="spin" aria-hidden="true"></span>
+                    <p id="payStatus" class="text-sm text-slate-200" aria-live="polite">Menunggu pembayaran…</p>
+                </div>
+                <div class="flex gap-3 mt-4">
+                    <button id="payCheck" type="button" class="flex-1 min-h-[44px] rounded-2xl glass font-semibold hover:border-cyan-400">Cek pembayaran</button>
+                    <button id="payBack" type="button" class="min-h-[44px] px-4 rounded-2xl text-slate-300 font-semibold hover:text-white">Ganti email</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Langkah 3: lisensi -->
+        <div data-step="done" hidden>
+            <div class="flex items-center gap-3 mb-4">
+                <span class="w-10 h-10 rounded-full bg-green-500/15 text-green-400 flex items-center justify-center"><i class="fas fa-check"></i></span>
+                <div>
+                    <p class="font-bold">Pembayaran berhasil</p>
+                    <p id="doneMeta" class="text-sm text-slate-400"></p>
+                </div>
+            </div>
+
+            <p class="text-sm font-semibold mb-2">Kode lisensi</p>
+            <div class="glass rounded-2xl p-4 border-cyan-500/30">
+                <code id="doneKey" class="block font-mono text-lg tracking-wider break-all select-all"></code>
+            </div>
+            <button id="doneCopy" type="button" class="hero-btn mt-3 w-full min-h-[48px] rounded-2xl text-white font-bold">
+                <i class="far fa-copy" aria-hidden="true"></i> <span id="doneCopyText">Salin kode</span>
+            </button>
+            <p class="text-xs text-slate-400 mt-3 leading-relaxed">
+                Kode juga dikirim ke <b id="doneEmail" class="text-white break-all"></b>. Simpan dengan aman dan jangan dibagikan ke orang lain.
+            </p>
+
+            <div class="glass rounded-2xl p-4 mt-5">
+                <p class="font-bold mb-2">Aktifkan di Chrome</p>
+                <ol class="list-decimal list-inside text-sm text-slate-300 space-y-1 leading-relaxed">
+                    <li>Buka extension <b>Shopee Product Hunter</b>.</li>
+                    <li>Login atau daftar dengan akunmu.</li>
+                    <li>Pilih menu <b>Aktifkan License</b>.</li>
+                    <li>Masukkan kode di atas, lalu klik <b>Aktifkan</b>.</li>
+                </ol>
+            </div>
+            <a id="doneSupport" href="#" target="_blank" rel="noopener noreferrer" class="block text-center text-sm text-slate-300 underline decoration-cyan-400/60 underline-offset-2 mt-4 hover:text-white">
+                Butuh bantuan? Masuk grup support
+            </a>
+        </div>
+
+    </div>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   PENGATURAN — ubah di sini saja
+   ===================================================================== */
+const CONFIG = {
+    apiBase:      'https://payment.trendvisionindonesia.workers.dev',
+    telegramBot:  'https://t.me/PaymentShopeeProductHunter_bot', // cadangan kalau server sedang bermasalah
+    supportGroup: 'https://t.me/+tDtquz8U_fUzMTI9',
+    youtubeId:    '',            // isi ID video YouTube (mis. 'dQw4w9WgXcQ') untuk menampilkan blok video
+    pollMs:       8000,          // jeda cek status pembayaran
+    pollMaxMs:    20 * 60 * 1000 // berhenti cek otomatis setelah 20 menit
+};
+
+// Tampil instan; diganti otomatis dengan harga dari worker begitu terhubung.
+const FALLBACK_PLANS = [
+    { duration_days: 7,   name: 'Basic',   amount: 15000 },
+    { duration_days: 30,  name: 'Starter', amount: 39000 },
+    { duration_days: 90,  name: 'Growth',  amount: 99000 },
+    { duration_days: 180, name: 'Pro',     amount: 149000 },
+    { duration_days: 365, name: 'Annual',  amount: 249000 }
+];
+
+/* ===================================================================== */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const rupiah = n => 'Rp ' + Math.round(Number(n)).toLocaleString('id-ID');
+
+const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (_) {} }
+};
+const ORDER_KEY = 'sph_order';
+const EMAIL_KEY = 'sph_email';
+const ORDER_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // sejalan dengan jendela sweep worker (3 hari)
+
+let plans = FALLBACK_PLANS;
+const state = { plan: null, order: null, email: '', polling: false, checking: false, timer: null, startedAt: 0 };
+
+/* ---------------------------------------------------------------- API */
+class ApiError extends Error { constructor(code, message) { super(message); this.code = code; } }
+
+async function api(path, opts = {}) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 20000);
+    let res;
+    try {
+        res = await fetch(CONFIG.apiBase + path, { ...opts, signal: ctrl.signal });
+    } catch (_) {
+        throw new ApiError('NETWORK', 'Tidak bisa terhubung ke server pembayaran. Periksa koneksi internet lalu coba lagi.');
+    } finally { clearTimeout(t); }
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+    if (!res.ok || !data || data.success === false) {
+        throw new ApiError(data?.error?.code || ('HTTP_' + res.status),
+            data?.error?.message || 'Server pembayaran sedang bermasalah. Coba lagi sebentar lagi.');
+    }
+    return data;
+}
+
+/* -------------------------------------------------------------- Paket */
+function renderPlans() {
+    const perDay = p => p.amount / p.duration_days;
+    const best = plans.reduce((a, b) => perDay(b) < perDay(a) ? b : a, plans[0]);
+    $('#plans').innerHTML = plans.map(p => `
+        <article class="link-card glass rounded-[28px] p-5 border border-white/5">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="font-bold text-lg">${esc(p.name)}</h3>
+                    <p class="text-sm text-slate-400">${esc(p.duration_days)} hari</p>
+                    ${p === best ? '<p class="inline-block mt-2 text-xs font-semibold text-cyan-300 bg-cyan-500/10 rounded-full px-3 py-1">Termurah per hari</p>' : ''}
+                </div>
+                <div class="text-right">
+                    <p class="text-2xl font-extrabold">${rupiah(p.amount)}</p>
+                    <p class="text-xs text-slate-400">sekitar ${rupiah(perDay(p))} per hari</p>
+                </div>
+            </div>
+            <button type="button" data-plan="${esc(p.duration_days)}"
+                class="hero-btn mt-4 w-full min-h-[48px] rounded-2xl text-white font-bold">
+                Beli ${esc(p.name)}
+            </button>
+        </article>`).join('');
+}
+
+async function loadPlans() {
+    try {
+        const data = await api('/api/v1/web/plans');
+        if (Array.isArray(data.plans) && data.plans.length) { plans = data.plans; renderPlans(); }
+    } catch (_) { /* pakai harga bawaan; kesalahan server baru ditampilkan saat checkout */ }
+}
+
+/* ------------------------------------------------------------- Dialog */
+const dlg = $('#checkout');
+
+function show(step) {
+    $$('[data-step]', dlg).forEach(el => { el.hidden = el.dataset.step !== step; });
+    $('#ck-title').textContent = step === 'done' ? 'Lisensi kamu' : 'Beli paket ' + (state.plan?.name || state.order?.plan || '');
+}
+
+function setError(msg) {
+    const el = $('#ckError');
+    el.textContent = msg || '';
+    el.hidden = !msg;
+}
+
+function openCheckout(days) {
+    const plan = plans.find(p => Number(p.duration_days) === Number(days));
+    if (!plan) return;
+    stopPolling();
+    state.plan = plan; state.order = null;
+    $('#ckPlanName').textContent = plan.name;
+    $('#ckPlanDays').textContent = plan.duration_days + ' hari';
+    $('#ckPlanPrice').textContent = rupiah(plan.amount);
+    const saved = store.get(EMAIL_KEY);
+    if (saved && !$('#ckEmail').value) $('#ckEmail').value = saved;
+    setError('');
+    show('form');
+    if (!dlg.open) dlg.showModal();
+    $('#ckEmail').focus();
+}
+
+function fillPay(order) {
+    $('#payPlan').textContent = `${order.plan} (${order.plan_duration_days} hari)`;
+    $('#payAmount').textContent = order.amount_formatted || rupiah(order.amount);
+    $('#payEmail').textContent = order.buyer_email;
+    $('#payEmail2').textContent = order.buyer_email;
+    $('#payOrder').textContent = order.order_id;
+    const link = $('#payLink');
+    link.href = String(order.payment_link || '').startsWith('https://lynk.id/') ? order.payment_link : '#';
+}
+
+function setStatus(msg, busy) {
+    $('#payStatus').textContent = msg;
+    $('#paySpin').hidden = !busy;
+}
+
+/* ----------------------------------------------------------- Checkout */
+$('#ckForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = $('#ckSubmit');
+    const emailEl = $('#ckEmail');
+    const email = emailEl.value.trim().toLowerCase();
+    if (!emailEl.checkValidity() || !email) { setError('Masukkan alamat email yang valid, contoh nama@email.com.'); emailEl.focus(); return; }
+    setError('');
+    btn.disabled = true; btn.textContent = 'Membuat pesanan…';
+    try {
+        const data = await api('/api/v1/web/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plan_duration_days: state.plan.duration_days, email, website: e.target.website.value })
+        });
+        state.order = data; state.email = data.buyer_email;
+        store.set(EMAIL_KEY, data.buyer_email);
+        store.set(ORDER_KEY, { ...data, ts: Date.now() });
+        fillPay(data);
+        show('pay');
+        setStatus('Menunggu pembayaran…', true);
+        startPolling(data.reused); // kalau order lama dipakai ulang, bisa jadi sudah dibayar → cek langsung
+    } catch (err) {
+        setError(err.message);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Lanjut ke pembayaran';
+    }
+});
+
+/* ------------------------------------------------------------ Polling */
+function stopPolling() { state.polling = false; clearTimeout(state.timer); state.timer = null; }
+
+function startPolling(immediate) {
+    stopPolling();
+    state.polling = true; state.startedAt = Date.now();
+    const tick = async () => {
+        if (!state.polling) return;
+        await checkStatus(false);
+        if (!state.polling) return;
+        if (Date.now() - state.startedAt > CONFIG.pollMaxMs) {
+            stopPolling();
+            setStatus('Pembayaran belum terdeteksi. Pastikan kamu sudah membayar dengan email yang sama, lalu klik Cek pembayaran.', false);
+            return;
+        }
+        state.timer = setTimeout(tick, CONFIG.pollMs);
+    };
+    state.timer = setTimeout(tick, immediate ? 0 : CONFIG.pollMs);
+}
+
+async function checkStatus(manual) {
+    if (state.checking || !state.order) return;
+    state.checking = true;
+    if (manual) setStatus('Memeriksa pembayaran…', true);
+    try {
+        const o = state.order;
+        const data = await api(`/api/v1/web/status/${encodeURIComponent(o.order_id)}?email=${encodeURIComponent(o.buyer_email)}`);
+        if (data.status === 'completed' && data.license_key) { finish(data); return; }
+        if (manual && !state.polling) startPolling(false);
+        if (data.checked || manual) setStatus('Menunggu pembayaran. Halaman ini memeriksa otomatis; biasanya butuh sekitar satu menit setelah kamu membayar.', true);
+    } catch (err) {
+        if (err.code === 'NOT_FOUND') {
+            stopPolling(); store.del(ORDER_KEY);
+            setStatus('Pesanan tidak ditemukan. Tutup jendela ini lalu buat pesanan baru.', false);
+        } else {
+            setStatus('Belum bisa memeriksa pembayaran (' + err.message + ') Mencoba lagi otomatis.', true);
+        }
+    } finally { state.checking = false; }
+}
+
+function finish(data) {
+    stopPolling();
+    store.del(ORDER_KEY);
+    $('#resume').hidden = true;
+    const o = state.order;
+    $('#doneKey').textContent = data.license_key;
+    $('#doneMeta').textContent = `Paket ${data.plan || o.plan} · ${data.plan_duration_days || o.plan_duration_days} hari`;
+    $('#doneEmail').textContent = o.buyer_email;
+    $('#doneCopyText').textContent = 'Salin kode';
+    show('done');
+    $('#doneCopy').focus();
+}
+
+$('#payCheck').addEventListener('click', () => checkStatus(true));
+$('#payBack').addEventListener('click', () => { stopPolling(); show('form'); $('#ckEmail').value = state.order?.buyer_email || ''; $('#ckEmail').focus(); });
+
+document.addEventListener('visibilitychange', () => {
+    // pembeli kembali dari tab Lynk.id → langsung cek
+    if (document.visibilityState === 'visible' && dlg.open && state.polling) checkStatus(false);
+});
+
+/* ----------------------------------------------------- Salin lisensi */
+$('#doneCopy').addEventListener('click', async () => {
+    const key = $('#doneKey').textContent;
+    let ok = false;
+    try { await navigator.clipboard.writeText(key); ok = true; } catch (_) {
+        const r = document.createRange(); r.selectNodeContents($('#doneKey'));
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        try { ok = document.execCommand('copy'); } catch (_) {}
+    }
+    $('#doneCopyText').textContent = ok ? 'Tersalin' : 'Tekan lama untuk menyalin';
+    if (ok) setTimeout(() => { $('#doneCopyText').textContent = 'Salin kode'; }, 2000);
+});
+
+/* --------------------------------------------- Tutup dialog + resume */
+$('#ckClose').addEventListener('click', () => dlg.close());
+dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); }); // klik area gelap
+dlg.addEventListener('close', () => { stopPolling(); renderResume(); });
+
+function renderResume() {
+    const o = store.get(ORDER_KEY);
+    const box = $('#resume');
+    if (!o || !o.order_id || Date.now() - (o.ts || 0) > ORDER_MAX_AGE_MS) { if (o) store.del(ORDER_KEY); box.hidden = true; return; }
+    $('#resumeInfo').textContent = `Paket ${o.plan} · ${o.order_id} · ${o.buyer_email}`;
+    box.hidden = false;
+}
+$('#resumeGo').addEventListener('click', () => {
+    const o = store.get(ORDER_KEY); if (!o) return;
+    state.order = o; state.plan = plans.find(p => Number(p.duration_days) === Number(o.plan_duration_days)) || null;
+    fillPay(o); show('pay'); setStatus('Memeriksa pembayaran…', true);
+    if (!dlg.open) dlg.showModal();
+    startPolling(true);
+});
+$('#resumeDrop').addEventListener('click', () => { store.del(ORDER_KEY); renderResume(); });
+
+/* ------------------------------------------------ Link + video + init */
+$('#plans').addEventListener('click', e => {
+    const b = e.target.closest('[data-plan]');
+    if (b) openCheckout(b.dataset.plan);
+});
+
+$$('[data-link="support"]').forEach(a => { a.href = CONFIG.supportGroup; a.target = '_blank'; a.rel = 'noopener noreferrer'; });
+$('#doneSupport').href = CONFIG.supportGroup;
+if (CONFIG.telegramBot) { const t = $('#tgFallback'); t.href = CONFIG.telegramBot; t.hidden = false; }
+
+if (CONFIG.youtubeId) {
+    $('#videoWrap').hidden = false;
+    $('#videoThumb').src = `https://i.ytimg.com/vi/${encodeURIComponent(CONFIG.youtubeId)}/hqdefault.jpg`;
+    $('#videoBtn').addEventListener('click', () => {
+        const box = $('#videoBtn').parentElement;
+        box.innerHTML = `<iframe class="w-full h-full" src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(CONFIG.youtubeId)}?autoplay=1&rel=0"
+            title="Video Shopee Product Hunter" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+    });
+}
+
+renderPlans();
+loadPlans();
+renderResume();
+})();
+</script>
+
+</body>
+</html>
